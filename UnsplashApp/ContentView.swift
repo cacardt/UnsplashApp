@@ -69,3 +69,23 @@ extension Image {
         }
     }
 }
+
+struct UnsplashPhoto: Codable {
+    let id, slug: String
+    let urls: Urls
+    let user: User
+}
+
+struct Urls: Codable {
+    let raw, full, regular, small: String
+    let thumb, smallS3: String
+
+    enum CodingKeys: String, CodingKey {
+        case raw, full, regular, small, thumb
+        case smallS3 = "small_s3"
+    }
+}
+
+struct User: Codable {
+    let id, username: String
+}
