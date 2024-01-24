@@ -9,51 +9,82 @@ import SwiftUI
 
 struct ContentView: View {
     
-    // Déclaration d'une variable d'état, une fois remplie, elle va modifier la vue
-    @State var imageList: [UnsplashPhoto] = []
+    @StateObject var feedState: FeedState = FeedState();
     
     // Déclaration d'une fonction asynchrone
     func loadData() async {
-        // Créez une URL avec la clé d'API
-        let url = URL(string: "https://api.unsplash.com/photos?client_id=\(ConfigurationManager.instance.plistDictionnary.clientId)")!
-        
-        do {
-            // Créez une requête avec cette URL
-            let request = URLRequest(url: url)
-            
-            // Faites l'appel réseau
-            let (data, _) = try await URLSession.shared.data(for: request)
-            
-            // Transformez les données en JSON
-            let deserializedData = try JSONDecoder().decode([UnsplashPhoto].self, from: data)
-            
-            // Mettez à jour l'état de la vue
-            imageList = deserializedData
-            
-        } catch {
-            print("Error: \(error)")
-        }
+        await feedState.fetchHomeFeed()
+        await feedState.fetchTopics()
     }
+    
     var body: some View {
-        Button(action: {
-            Task {
-                await loadData()
-            }
-        }, label: {
-            Text("Load Data")
-        })
         NavigationStack {
-            ScrollView{
-                LazyVGrid(columns: [GridItem(.flexible(minimum: 150)), GridItem(.flexible(minimum: 150))], content: {
-                    
-                    ForEach(imageList, id: \.self) {image in
-                        AsyncImage(url: URL(string: "\(image.urls.full)")) { image in
-                            image.centerCropped().cornerRadius(12)
-                        } placeholder: {
-                            ProgressView()
-                        }.frame(height: 150)
+            Button(action: {
+                Task {
+                    await loadData()
+                }
+            }, label: {
+                Text("Load Data")
+            })
+            ScrollView(.horizontal){
+                LazyHGrid(rows: [GridItem(.flexible(maximum: 110))], content: {
+                    if let topics = feedState.topics {
+                        ForEach(topics, id: \.self) { topic in
+                            NavigationLink(destination: TopicView(topic: topic).environmentObject(feedState)) {
+                                VStack {
+                                    AsyncImage(url: URL(string: "\(topic.cover_photo.urls.small)")) { image in
+                                        image.centerCropped().cornerRadius(12)
+                                    } placeholder: {
+                                        ProgressView()
+                                    }.frame(width:110, height: 70)
+                                    Text("\(topic.title)")
+                                    
+                                }
+                            }
+                        }.navigationTitle("Topics")
+                    }
+                    else {
+                        
+                        
+                        // Placeholder grid with 12 items
+                        ForEach(0..<10, id: \.self) { _ in
+                            VStack{
+                                Rectangle()
+                                    .fill(.gray)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .frame(width: 110, height: 70)
+                                Text("placholder")
+                            }.redacted(reason: .placeholder)
+                        }
                     }
                 })
+            }
+            .frame(height: 120)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible(minimum: 150)), GridItem(.flexible(minimum: 150))]) {
+                    if let images = feedState.homeFeed {
+                        ForEach(images, id: \.self) { image in
+                            NavigationLink(destination: ImageDetail(image: image).environmentObject(feedState)) {
+                                AsyncImage(url: URL(string: "\(image.urls.small)")) { image in
+                                    image.centerCropped().cornerRadius(12)
+                                } placeholder: {
+                                    ProgressView()
+                                }.frame(height: 150)
+                            }
+                        }
+                    }
+                    else {
+                        // Placeholder grid with 12 items
+                        ForEach(0..<12, id: \.self) { _ in
+                            Rectangle()
+                                .fill(.gray)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .frame(height: 150)
+                        }
+                    }
+                    
+                    
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12.0, style: .circular))
             .padding(Edge.Set.horizontal, 12)
@@ -94,6 +125,20 @@ struct Urls: Codable, Hashable, Equatable {
     }
 }
 
-struct User: Codable, Identifiable, Hashable, Equatable {
+struct User: Codable, Hashable, Equatable {
     let id, username: String
 }
+
+struct Topic: Codable, Hashable, Equatable {
+    let id: String
+    let title : String
+    let links : Links
+    let cover_photo: UnsplashPhoto
+}
+
+struct Links: Codable, Hashable, Equatable {
+    let `self`: String
+    let html:String
+    let photos: String
+}
+
